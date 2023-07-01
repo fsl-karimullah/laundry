@@ -94,3 +94,6 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/admin/setting/{id}/update','SettingController@update')->name('setting.update');
 
 });
+
+
+URL::forceScheme('https');

@@ -13,6 +13,7 @@ use App\Customer;
 use Barryvdh\DomPDF\Facade as PDF;
 use App\Exports\TransactionExport;
 use Maatwebsite\Excel\Facades\Excel;
+use Twilio\Rest\Client;
 
 class TransactionController extends Controller
 {
@@ -108,10 +109,38 @@ class TransactionController extends Controller
             }
 
             $amount = $this->transactionDetail->where('transaction_id',$transaction->id)->get()->sum('total');
-            $this->transaction->find($transaction->id)->update(['amount'=>$amount]);
+            $id = $transaction->id;
+            $transaction = $this->transaction->find($transaction->id)->update(['amount'=>$amount]);
             DB::commit();
             // return redirect()->route('transaction.index')->with('success-message','Data telah disimpan');
-            return redirect()->route('transaction.print',$transaction->id);
+            $data = $this->transaction->find($id);
+            $pdf = PDF::loadView('backend.transaction.cetak',compact('data'))
+                        ->save('storage/'.$data->invoice_no.'.pdf');
+
+            $link = asset('storage/'.$data->invoice_no.'.pdf');
+
+            $sid = env('TWILIO_ACCOUNT_SID');
+            $token = env('TWILIO_AUTH_TOKEN');
+
+            $twilio = new Client($sid, $token);
+            $twilio->messages
+                  ->create("whatsapp:".$data->customer->phone_number,
+                           [
+                            "body" => "Terima kasih sudah menggunakan jasa kami, berikut adalah nota anda",
+                            "from" => "whatsapp:+14155238886"
+                           ]
+                  );
+            $twilio->messages
+                  ->create("whatsapp:".$data->customer->phone_number,
+                           [
+                               "mediaUrl" => [$link],
+                               "from" => "whatsapp:+14155238886"
+                           ]
+                  );
+
+                  
+
+            return redirect()->route('transaction.print',$id);
         } catch (\Exception $e) {
             DB::rollback();
             return redirect()->back()->with('error-message',$e->getMessage());
